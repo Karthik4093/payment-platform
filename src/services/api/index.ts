@@ -8,30 +8,35 @@ const PORT = parseInt(process.env.API_PORT ?? '3000', 10);
 const HOST = process.env.API_HOST ?? '0.0.0.0';
 
 async function main() {
-  try {
-    // Connect to all infrastructure
-    await connectDB();
-    getRedisClient(); // Initialize Redis connection
-    await connectRabbitMQ();
+  // PostgreSQL is mandatory — fail fast if unavailable
+  await connectDB();
 
-    const app = buildApp();
-    await app.listen({ port: PORT, host: HOST });
+  // Redis: initialize client (reconnects automatically in background)
+  getRedisClient();
 
-    logger.info({ port: PORT, host: HOST }, 'API service started');
+  // RabbitMQ: attempt connection but don't crash on failure at startup;
+  // the worker retry loop handles reconnects, and the API can still serve
+  // read-only requests while MQ reconnects.
+  connectRabbitMQ().catch((err) => {
+    logger.error({ err }, 'RabbitMQ initial connection failed — will retry in background');
+  });
 
-    // Graceful shutdown
-    const shutdown = async (signal: string) => {
-      logger.info({ signal }, 'Shutting down API service...');
-      await app.close();
-      process.exit(0);
-    };
+  const app = buildApp();
+  await app.listen({ port: PORT, host: HOST });
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-  } catch (err) {
-    logger.error({ err }, 'Failed to start API service');
-    process.exit(1);
-  }
+  logger.info({ port: PORT, host: HOST }, 'API service started');
+
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, 'Shutting down API service...');
+    await app.close();
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-main();
+main().catch((err) => {
+  logger.error({ err }, 'Fatal startup error');
+  process.exit(1);
+});

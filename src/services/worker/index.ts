@@ -6,30 +6,27 @@ import { handlePaymentMessage } from '../../workers/payment.worker.js';
 import { handleRefundMessage } from '../../workers/refund.worker.js';
 
 async function main() {
-  try {
-    logger.info('Starting worker service...');
+  logger.info('Starting worker service...');
 
-    await connectDB();
-    getRedisClient();
-    await connectRabbitMQ();
+  await connectDB();
+  getRedisClient();
+  await connectRabbitMQ();
 
-    // Register consumers
-    await consume(QUEUES.PAYMENT_PROCESS, handlePaymentMessage);
-    await consume(QUEUES.REFUND_PROCESS, handleRefundMessage);
+  await consume(QUEUES.PAYMENT_PROCESS, handlePaymentMessage);
+  await consume(QUEUES.REFUND_PROCESS, handleRefundMessage);
 
-    logger.info('Worker service started — consuming from payment.process and refund.process');
+  logger.info('Worker service started — consuming from payment.process and refund.process');
 
-    const shutdown = async (signal: string) => {
-      logger.info({ signal }, 'Shutting down worker service...');
-      process.exit(0);
-    };
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, 'Shutting down worker service...');
+    process.exit(0);
+  };
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-  } catch (err) {
-    logger.error({ err }, 'Failed to start worker service');
-    process.exit(1);
-  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-main();
+main().catch((err) => {
+  logger.error({ err }, 'Fatal worker startup error');
+  process.exit(1);
+});
