@@ -1,0 +1,98 @@
+services:
+  - type: web
+    name: payment-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/services/api/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: payments-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: GATEWAY_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: FRAUD_MAX_PAYMENTS_PER_MINUTE
+        value: "10"
+      - key: FRAUD_MAX_FAILURES_PER_5_MINUTES
+        value: "5"
+      - key: FRAUD_MAX_AMOUNT
+        value: "100000"
+      - key: RETRY_MAX_ATTEMPTS
+        value: "5"
+      - key: RETRY_BASE_DELAY_MS
+        value: "1000"
+      - key: WEBHOOK_URL
+        value: https://payment-api.onrender.com/webhooks/payment
+      - key: INVENTORY_SERVICE_URL
+        value: https://payment-gateway.onrender.com/inventory
+      - key: SHIPPING_SERVICE_URL
+        value: https://payment-gateway.onrender.com/shipping
+
+  - type: worker
+    name: payment-worker
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: node dist/services/worker/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: payments-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: GATEWAY_URL
+        value: https://payment-gateway.onrender.com
+      - key: WEBHOOK_URL
+        value: https://payment-api.onrender.com/webhooks/payment
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: INVENTORY_SERVICE_URL
+        value: https://payment-gateway.onrender.com/inventory
+      - key: SHIPPING_SERVICE_URL
+        value: https://payment-gateway.onrender.com/shipping
+      - key: RETRY_MAX_ATTEMPTS
+        value: "5"
+      - key: RETRY_BASE_DELAY_MS
+        value: "1000"
+
+  - type: web
+    name: payment-gateway
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/services/gateway-simulator/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WEBHOOK_URL
+        value: https://payment-api.onrender.com/webhooks/payment
+      - key: WEBHOOK_SECRET
+        sync: false
+
+databases:
+  - name: payments-db
+    databaseName: payments_db
+    user: payments_user
+    plan: free
+    region: oregon
