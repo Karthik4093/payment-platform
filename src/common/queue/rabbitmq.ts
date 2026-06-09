@@ -142,7 +142,7 @@ export async function consume(
 ): Promise<void> {
   const ch = getChannel();
 
-  await ch.consume(queue, async (msg) => {
+  await ch.consume(queue, async (msg: ConsumeMessage | null) => {
     if (!msg) return;
     try {
       await handler(msg, ch);

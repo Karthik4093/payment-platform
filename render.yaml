@@ -4,7 +4,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/services/api/index.js
     healthCheckPath: /health
     envVars:
@@ -46,7 +46,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: node dist/services/worker/index.js
     envVars:
       - key: NODE_ENV
