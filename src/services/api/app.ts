@@ -120,7 +120,10 @@ export function buildApp() {
       ]);
 
       const healthy = db && redis && mq;
-      return reply.code(healthy ? 200 : 503).send({
+      // Always return HTTP 200 — Render uses /health as a liveness probe.
+      // Returning 503 makes Render think the process crashed and restart-loops.
+      // Actual dependency status is in the body for monitoring/alerting.
+      return reply.code(200).send({
         status: healthy ? 'healthy' : 'degraded',
         checks: {
           postgres: db ? 'ok' : 'error',
