@@ -1,11 +1,15 @@
-import amqplib, { type Channel, type Connection, type ConsumeMessage } from 'amqplib';
+import amqplib from 'amqplib';
+import type { Channel, ConsumeMessage } from 'amqplib';
 import { logger } from '../logger/index.js';
 import { QUEUES, EXCHANGES, DELAY_QUEUES } from './types.js';
 
 // Re-export for consumers so they only import from one place
 export { QUEUES, EXCHANGES, DELAY_QUEUES } from './types.js';
 
-let connection: Connection | null = null;
+// Use the actual return type of amqplib.connect to avoid version mismatch
+type AmqpConnection = Awaited<ReturnType<typeof amqplib.connect>>;
+
+let connection: AmqpConnection | null = null;
 let channel: Channel | null = null;
 let isConnecting = false;
 
@@ -22,7 +26,7 @@ export async function connectRabbitMQ(): Promise<void> {
     try {
       connection = await amqplib.connect(url);
 
-      connection.on('error', (err) => {
+      connection.on('error', (err: Error) => {
         logger.error({ err }, 'RabbitMQ connection error');
       });
       connection.on('close', () => {
@@ -128,13 +132,7 @@ export async function publishToDelayQueue(
   retryCount: number,
 ): Promise<boolean> {
   const delayMs = RETRY_DELAYS[retryCount] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
-  const delayQueue = DELAY_QUEUES[delayMs];
-
-  if (!delayQueue) {
-    // Fallback: publish directly with a 16s delay queue
-    return publishToQueue(DELAY_QUEUES[16000], payload);
-  }
-
+  const delayQueue = DELAY_QUEUES[delayMs] ?? DELAY_QUEUES[16000];
   return publishToQueue(delayQueue, payload);
 }
 
@@ -146,12 +144,11 @@ export async function consume(
 
   await ch.consume(queue, async (msg) => {
     if (!msg) return;
-
     try {
       await handler(msg, ch);
     } catch (err) {
       logger.error({ err, queue }, 'Unhandled error in message handler');
-      ch.nack(msg, false, false); // send to DLQ
+      ch.nack(msg, false, false);
     }
   });
 

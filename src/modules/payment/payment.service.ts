@@ -47,7 +47,7 @@ export class PaymentService {
     });
     if (existing) {
       logger.info({ key: input.idempotencyKey }, 'Idempotency key hit — returning cached response');
-      return existing.response as PaymentResponse;
+      return existing.response as unknown as PaymentResponse;
     }
 
     // 2. Fraud pre-check
@@ -61,7 +61,7 @@ export class PaymentService {
           amount: BigInt(input.amount),
           currency: input.currency,
           correlationId: input.correlationId,
-          metadata: input.metadata ?? {},
+          metadata: (input.metadata ?? {}) as import('@prisma/client').Prisma.InputJsonValue,
         },
       });
 
@@ -72,7 +72,7 @@ export class PaymentService {
           key: input.idempotencyKey,
           merchantId: input.merchantId,
           paymentId: p.id,
-          response: response as unknown as Record<string, unknown>,
+          response: response as unknown as import('@prisma/client').Prisma.InputJsonValue,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h TTL
         },
       });

@@ -64,7 +64,7 @@ export class FraudService {
           merchantId,
           ruleViolated: violations.map((v) => v.rule).join(','),
           riskScore,
-          metadata: { violations, amount },
+          metadata: { violations, amount } as unknown as import('@prisma/client').Prisma.InputJsonValue,
           isBlocked: blocked,
         },
       });

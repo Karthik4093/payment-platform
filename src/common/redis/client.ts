@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { logger } from '../logger/index.js';
 
 let redisClient: Redis | null = null;
@@ -9,17 +9,17 @@ export function getRedisClient(): Redis {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       lazyConnect: false,
-      retryStrategy(times) {
+      retryStrategy(times: number) {
         if (times > 10) return null;
         return Math.min(times * 200, 2000);
       },
-      reconnectOnError(err) {
+      reconnectOnError(err: Error) {
         return err.message.includes('READONLY');
       },
     });
 
     redisClient.on('connect', () => logger.info('Redis connected'));
-    redisClient.on('error', (err) => logger.error({ err }, 'Redis error'));
+    redisClient.on('error', (err: Error) => logger.error({ err }, 'Redis error'));
     redisClient.on('close', () => logger.warn('Redis connection closed'));
     redisClient.on('reconnecting', () => logger.info('Redis reconnecting'));
   }
