@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  AUTHORIZED
+  CAPTURED
+  SUCCESS
+  FAILED
+  RETRYING
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DUPLICATE
+}
+
+enum SagaStatus {
+  STARTED
+  RUNNING
+  COMPLETED
+  COMPENSATING
+  COMPENSATED
+  FAILED
+}
+
+// ─── Models ─────────────────────────────────────────────────────
+
+model Merchant {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  apiKey    String   @unique @default(uuid())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments       Payment[]
+  ledgerAccounts LedgerAccount[]
+  fraudAlerts    FraudAlert[]
+
+  @@map("merchants")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  merchantId    String
+  amount        BigInt
+  currency      String        @default("USD")
+  status        PaymentStatus @default(PENDING)
+  retryCount    Int           @default(0)
+  maxRetries    Int           @default(5)
+  gatewayRef    String?
+  correlationId String?
+  metadata      Json?
+  failureReason String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  processedAt   DateTime?
+
+  merchant       Merchant        @relation(fields: [merchantId], references: [id])
+  attempts       PaymentAttempt[]
+  refunds        Refund[]
+  ledgerEntries  LedgerEntry[]
+  webhookEvents  WebhookEvent[]
+  sagaInstances  SagaInstance[]
+  idempotencyKey IdempotencyKey?
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([correlationId])
+  @@map("payments")
+}
+
+model PaymentAttempt {
+  id            String   @id @default(uuid())
+  paymentId     String
+  attemptNumber Int
+  status        String
+  gatewayRef    String?
+  errorCode     String?
+  errorMessage  String?
+  latencyMs     Int?
+  createdAt     DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("payment_attempts")
+}
+
+model Refund {
+  id          String       @id @default(uuid())
+  paymentId   String
+  amount      BigInt
+  status      RefundStatus @default(PENDING)
+  reason      String?
+  gatewayRef  String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  payment       Payment       @relation(fields: [paymentId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+model LedgerAccount {
+  id         String   @id @default(uuid())
+  merchantId String?
+  type       String
+  currency   String   @default("USD")
+  name       String
+  createdAt  DateTime @default(now())
+
+  merchant      Merchant?     @relation(fields: [merchantId], references: [id])
+  debitEntries  LedgerEntry[] @relation("DebitAccount")
+  creditEntries LedgerEntry[] @relation("CreditAccount")
+
+  @@unique([merchantId, type, currency])
+  @@map("ledger_accounts")
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid())
+  transactionId   String
+  debitAccountId  String
+  creditAccountId String
+  amount          BigInt
+  currency        String   @default("USD")
+  description     String
+  paymentId       String?
+  refundId        String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  debitAccount  LedgerAccount @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccount LedgerAccount @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  payment       Payment?      @relation(fields: [paymentId], references: [id])
+  refund        Refund?       @relation(fields: [refundId], references: [id])
+
+  @@index([transactionId])
+  @@index([paymentId])
+  @@index([refundId])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
+  @@map("ledger_entries")
+}
+
+model WebhookEvent {
+  id          String             @id @default(uuid())
+  eventId     String             @unique
+  paymentId   String?
+  eventType   String
+  payload     Json
+  signature   String
+  status      WebhookEventStatus @default(RECEIVED)
+  processedAt DateTime?
+  createdAt   DateTime           @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([eventId])
+  @@index([paymentId])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+model IdempotencyKey {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  merchantId String
+  paymentId  String?  @unique
+  response   Json
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([key])
+  @@index([merchantId])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+model FraudAlert {
+  id           String   @id @default(uuid())
+  merchantId   String
+  paymentId    String?
+  ruleViolated String
+  riskScore    Float
+  metadata     Json?
+  isBlocked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@index([paymentId])
+  @@index([createdAt])
+  @@map("fraud_alerts")
+}
+
+model SagaInstance {
+  id          String     @id @default(uuid())
+  paymentId   String
+  status      SagaStatus @default(STARTED)
+  currentStep String     @default("INIT")
+  steps       Json       @default("[]")
+  compensation Json?
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime   @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([status])
+  @@map("saga_instances")
+}

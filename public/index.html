@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Orchestration Platform</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">PayOrch</span>
+      </div>
+      <nav class="nav">
+        <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </a>
+        <a href="#payments" class="nav-item" data-tab="payments">
+          <span class="nav-icon">◎</span> Payments
+        </a>
+        <a href="#refunds" class="nav-item" data-tab="refunds">
+          <span class="nav-icon">↩</span> Refunds
+        </a>
+        <a href="#webhooks" class="nav-item" data-tab="webhooks">
+          <span class="nav-icon">⇄</span> Webhooks
+        </a>
+        <a href="#saga" class="nav-item" data-tab="saga">
+          <span class="nav-icon">◉</span> Saga
+        </a>
+        <a href="#ledger" class="nav-item" data-tab="ledger">
+          <span class="nav-icon">≡</span> Ledger
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/docs" target="_blank" class="docs-link">API Docs ↗</a>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 class="page-title" id="page-title">Dashboard</h1>
+        </div>
+        <div class="topbar-right">
+          <div class="health-indicator" id="health-indicator">
+            <span class="dot"></span> Checking...
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Dashboard ──────────────────────────────────────── -->
+      <section id="tab-dashboard" class="tab-content active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Payments</div>
+            <div class="stat-value" id="stat-total">—</div>
+            <div class="stat-sub">all time</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-label">Successful</div>
+            <div class="stat-value" id="stat-success">—</div>
+            <div class="stat-sub">payments</div>
+          </div>
+          <div class="stat-card failed">
+            <div class="stat-label">Failed</div>
+            <div class="stat-value" id="stat-failed">—</div>
+            <div class="stat-sub">payments</div>
+          </div>
+          <div class="stat-card pending">
+            <div class="stat-label">Processing</div>
+            <div class="stat-value" id="stat-processing">—</div>
+            <div class="stat-sub">in queue</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Create Payment</h2>
+          </div>
+          <form id="create-payment-form" class="form">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Merchant ID</label>
+                <input type="text" id="cp-merchant" value="merchant_1" placeholder="merchant_1" />
+              </div>
+              <div class="form-group">
+                <label>Amount (cents)</label>
+                <input type="number" id="cp-amount" value="1000" min="1" max="10000000" />
+              </div>
+              <div class="form-group">
+                <label>Currency</label>
+                <select id="cp-currency">
+                  <option value="USD" selected>USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Create Payment</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Recent Activity</h2>
+            <button class="btn btn-sm" onclick="loadDashboard()">Refresh</button>
+          </div>
+          <div id="recent-payments" class="table-container">
+            <div class="loading">Loading...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Payments ───────────────────────────────────────── -->
+      <section id="tab-payments" class="tab-content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Payments</h2>
+            <div class="panel-actions">
+              <input type="text" id="pay-merchant-filter" placeholder="Filter by Merchant ID" value="merchant_1" class="input-sm" />
+              <button class="btn btn-sm" onclick="loadPayments()">Search</button>
+            </div>
+          </div>
+          <div id="payments-table" class="table-container">
+            <div class="loading">Enter a merchant ID and search</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Refunds ────────────────────────────────────────── -->
+      <section id="tab-refunds" class="tab-content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Initiate Refund</h2>
+          </div>
+          <form id="refund-form" class="form">
+            <div class="form-row">
+              <div class="form-group" style="flex:2">
+                <label>Payment ID</label>
+                <input type="text" id="rf-payment-id" placeholder="Enter payment UUID" />
+              </div>
+              <div class="form-group">
+                <label>Reason</label>
+                <input type="text" id="rf-reason" placeholder="Customer request" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-warning">Initiate Refund</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Refund Status</h2>
+            <div class="panel-actions">
+              <input type="text" id="rf-lookup-payment" placeholder="Payment ID to lookup refunds" class="input-sm" />
+              <button class="btn btn-sm" onclick="loadRefundsForPayment()">Lookup</button>
+            </div>
+          </div>
+          <div id="refunds-table" class="table-container">
+            <div class="loading">Enter a payment ID to see its refunds</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Webhooks ───────────────────────────────────────── -->
+      <section id="tab-webhooks" class="tab-content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Webhook Events</h2>
+            <div class="panel-actions">
+              <input type="text" id="wh-payment-id" placeholder="Payment ID" class="input-sm" />
+              <button class="btn btn-sm" onclick="loadWebhookEvents()">Lookup</button>
+            </div>
+          </div>
+          <div id="webhook-events-table" class="table-container">
+            <div class="loading">Enter a payment ID to see webhook events</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Saga ───────────────────────────────────────────── -->
+      <section id="tab-saga" class="tab-content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Saga Status</h2>
+            <div class="panel-actions">
+              <input type="text" id="saga-payment-id" placeholder="Payment ID" class="input-sm" />
+              <button class="btn btn-sm" onclick="loadSagaStatus()">Lookup</button>
+            </div>
+          </div>
+          <div id="saga-status-container" class="table-container">
+            <div class="loading">Enter a payment ID to see its saga status</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Ledger ─────────────────────────────────────────── -->
+      <section id="tab-ledger" class="tab-content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Ledger Entries</h2>
+            <div class="panel-actions">
+              <input type="text" id="ledger-payment-id" placeholder="Payment ID" class="input-sm" />
+              <button class="btn btn-sm" onclick="loadLedgerEntries()">Lookup</button>
+            </div>
+          </div>
+          <div id="ledger-table" class="table-container">
+            <div class="loading">Enter a payment ID to see ledger entries</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Account Balance</h2>
+            <div class="panel-actions">
+              <input type="text" id="balance-merchant-id" placeholder="Merchant ID" class="input-sm" value="merchant_1" />
+              <button class="btn btn-sm" onclick="loadMerchantBalance()">Check Balance</button>
+            </div>
+          </div>
+          <div id="balance-container" class="table-container">
+            <div class="loading">Enter a merchant ID to check balance</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast-container"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
